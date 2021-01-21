@@ -137,7 +137,7 @@ class SlackWebHooksPlugin(notify.NotificationPlugin):
         if event.location:
             fields.append({"title": "location", "value": event.location, "short": True})
 
-        fields.append({"title": "datetime", "value": event.datetime.isoformat(), "short": True})
+        fields.append({"title": "datetime", "value": event.datetime.strftime("%d.%m.%y %H:%M:%S"), "short": True})
 
         exceptions = event_dict.get("exception", {}).get("values", [])
         if exceptions and isinstance(exceptions, list):
