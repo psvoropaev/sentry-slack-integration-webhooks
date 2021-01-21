@@ -92,6 +92,8 @@ class SlackWebHooksPlugin(notify.NotificationPlugin):
         if not self.is_configured(group.project):
             return
 
+        event_dict = dict(event.as_dict())
+
         webhook = self.get_option("webhook", event.project)
         channel = self.get_option("channel", event.project)
         username = self.get_option("username", event.project)
@@ -102,39 +104,49 @@ class SlackWebHooksPlugin(notify.NotificationPlugin):
         culprit = group.title.encode("utf-8")
         project_name = project.get_full_name().encode("utf-8")
 
-        title = "%s in %s(%s) <%s|%s>" % (
-            "New event" if group.times_seen == 1 else "Regression",
-            escape(project_name),
-            escape(project.name.encode("utf-8")),
+        # title = "%s in %s(%s) <%s|%s>" % (
+        #     "New event" if group.times_seen == 1 else "Regression",
+        #     escape(project_name.encode("utf-8")),
+        #     escape(event_dict.get('platform')),
+        #     group.get_absolute_url(),
+        #     escape(event.title.encode("utf-8")),
+        # )
+
+        title = "<%s|New event in %s>" % (
             group.get_absolute_url(),
-            escape(event.title.encode("utf-8")),
+            escape(project_name.encode("utf-8").upper()),
         )
 
         fields = []
 
+        fields.append({"title": "title", "value": escape(event.title.encode("utf-8")), "short": True})
+        fields.append({"title": "paltform", "value": escape(event_dict.get('platform')), "short": True})
+        fields.append({"title": "level", "value": escape(event_dict.get('level').upper()), "short": True})
+
+        tags = event_dict.get('tags')
+        if tags:
+            tags_str = ",  ".join(["%s: %s" % (x[0], x[1]) for x in tags])
+            fields.append({"title": "tags", "value": tags_str, "short": False})
+
         if message == culprit:
             culprit = ""
         else:
-            fields.append(
-                {"title": escape(message), "value": escape(culprit), "short": False,}
-            )
+            fields.append({"title": escape(message), "value": escape(culprit), "short": True})
 
+        escape(event.title.encode("utf-8")),
         if event.location:
-            fields.append(
-                {"title": "location", "value": event.location, "short": False,}
-            )
-        fields.append(
-            {"title": "datetime", "value": event.datetime.isoformat(), "short": False,}
-        )
+            fields.append({"title": "location", "value": event.location, "short": True})
 
-        exceptions = dict(event.as_dict()).get("exception", {}).get("values", [])
+        fields.append({"title": "datetime", "value": event.datetime.isoformat(), "short": True})
+
+        exceptions = event_dict.get("exception", {}).get("values", [])
         if exceptions and isinstance(exceptions, list):
             frames = (exceptions[0] or {}).get("stacktrace", {}).get("frames", [])
             if frames and isinstance(frames, list):
                 trace = frames[-1]
-                code = "%s\n\n*%s*\n\n%s" % (
+                code = "```%s\n\n>%s\n\n%s```" % (
                     "\n".join(trace.get("pre_context", [])),
-                    trace["context_line"],
+                    trace["context_line"][1:],
                     "\n".join(trace.get("post_context", [])),
                 )
                 fields.append(

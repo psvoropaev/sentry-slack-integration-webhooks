@@ -21,11 +21,11 @@ install_requires = [
 
 setup(
     name='sentry-slack-integration-webhooks',
-    version='0.1.0',
+    version='0.2.0',
     author='Pavel Voropaev',
     author_email='pavel.voropaev@gmail.com',
     description='A Sentry extension which pushes events to the slack incoming webhooks.',
-    long_description=__doc__,
+    long_description='A Sentry extension which pushes events to the slack incoming webhooks.',
     license='BSD',
     package_dir={'': 'src'},
     packages=find_packages('src'),
