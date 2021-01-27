@@ -1,4 +1,4 @@
-import sentry_slack_webhooks
+import sentry_slack_integration_webhooks
 
 import re
 import logging
@@ -67,7 +67,7 @@ class SlackWebHooksOptionsForm(forms.Form):
 
 class SlackWebHooksPlugin(notify.NotificationPlugin):
     author = "Pavel Voropaev"
-    version = sentry_slack_webhooks.VERSION
+    version = sentry_slack_integration_webhooks.VERSION
     description = "Pushes events to the slack incoming webhooks."
 
     slug = "slack-webhooks"
@@ -87,57 +87,51 @@ class SlackWebHooksPlugin(notify.NotificationPlugin):
     def color_for_group(self, group):
         return "#" + LEVEL_TO_COLOR.get(group.get_level_display(), "error")
 
-    def notify_users(self, group, event, **kwargs):
-
-        if not self.is_configured(group.project):
-            return
-
+    @staticmethod
+    def _make_fields(event, group):
         event_dict = dict(event.as_dict())
-
-        webhook = self.get_option("webhook", event.project)
-        channel = self.get_option("channel", event.project)
-        username = self.get_option("username", event.project)
-        icon = self.get_option("icon", event.project)
-
-        project = event.project
         message = group.message_short.encode("utf-8")
         culprit = group.title.encode("utf-8")
-        project_name = project.get_full_name().encode("utf-8")
 
-        # title = "%s in %s(%s) <%s|%s>" % (
-        #     "New event" if group.times_seen == 1 else "Regression",
-        #     escape(project_name.encode("utf-8")),
-        #     escape(event_dict.get('platform')),
-        #     group.get_absolute_url(),
-        #     escape(event.title.encode("utf-8")),
-        # )
+        fields = [
+            {
+                "title": "title",
+                "value": escape(event.title.encode("utf-8")),
+                "short": True,
+            },
+            {
+                "title": "paltform",
+                "value": escape(event_dict.get("platform").encode("utf-8")),
+                "short": True,
+            },
+            {
+                "title": "level",
+                "value": escape(event_dict.get("level").encode("utf-8").upper()),
+                "short": True,
+            },
+        ]
 
-        title = "<%s|New event in %s>" % (
-            group.get_absolute_url(),
-            escape(project_name.encode("utf-8").upper()),
-        )
-
-        fields = []
-
-        fields.append({"title": "title", "value": escape(event.title.encode("utf-8")), "short": True})
-        fields.append({"title": "paltform", "value": escape(event_dict.get('platform')), "short": True})
-        fields.append({"title": "level", "value": escape(event_dict.get('level').upper()), "short": True})
-
-        tags = event_dict.get('tags')
+        tags = event_dict.get("tags")
         if tags:
             tags_str = ",  ".join(["%s: %s" % (x[0], x[1]) for x in tags])
             fields.append({"title": "tags", "value": tags_str, "short": False})
 
-        if message == culprit:
-            culprit = ""
-        else:
-            fields.append({"title": escape(message), "value": escape(culprit), "short": True})
+        if message != culprit:
+            fields.append(
+                {"title": escape(message), "value": escape(culprit), "short": True}
+            )
 
         escape(event.title.encode("utf-8")),
         if event.location:
             fields.append({"title": "location", "value": event.location, "short": True})
 
-        fields.append({"title": "datetime", "value": event.datetime.strftime("%d.%m.%y %H:%M:%S"), "short": True})
+        fields.append(
+            {
+                "title": "datetime",
+                "value": event.datetime.strftime("%d.%m.%y %H:%M:%S"),
+                "short": True,
+            }
+        )
 
         exceptions = event_dict.get("exception", {}).get("values", [])
         if exceptions and isinstance(exceptions, list):
@@ -152,12 +146,36 @@ class SlackWebHooksPlugin(notify.NotificationPlugin):
                 fields.append(
                     {"title": "trace", "value": code, "short": False,}
                 )
+        return fields
+
+    def notify_users(self, group, event, **kwargs):
+
+        if not self.is_configured(group.project):
+            return
+
+        webhook = self.get_option("webhook", event.project)
+        channel = self.get_option("channel", event.project)
+        username = self.get_option("username", event.project)
+        icon = self.get_option("icon", event.project)
+
+        project = event.project
+        project_name = project.get_full_name().encode("utf-8")
+
+        title = "<%s|New event in %s>" % (
+            group.get_absolute_url(),
+            escape(project_name.encode("utf-8").upper()),
+        )
 
         payload = {
             "parse": "none",
             "text": title,
             "channel": channel,
-            "attachments": [{"color": self.color_for_group(group), "fields": fields}],
+            "attachments": [
+                {
+                    "color": self.color_for_group(group),
+                    "fields": self._make_fields(event, group),
+                }
+            ],
         }
 
         if username:
